@@ -40,6 +40,7 @@ type UserHandler struct {
 	logger    *slog.Logger
 	cfg       *config.Config
 	vsixCache map[string]*CacheEntry
+	zipCache  map[string]*CacheEntry
 	cacheMu   sync.RWMutex
 	limiter   *rate.Limiter
 }
@@ -68,11 +69,14 @@ func NewUserHandler(
 		logger:    logger,
 		cfg:       cfg,
 		vsixCache: make(map[string]*CacheEntry),
+		zipCache:  make(map[string]*CacheEntry),
 		limiter:   rate.NewLimiter(rate.Every(time.Duration(cfg.Extension.LimitSecond)*time.Second), cfg.Extension.Limit),
 	}
 
 	w.GET("/api/v1/static/vsix/:version", web.BaseHandler(u.VSIXDownload))
 	w.GET("/api/v1/static/vsix", web.BaseHandler(u.VSIXDownload))
+	w.GET("/api/v1/static/zip/:version", web.BaseHandler(u.ZipDownload))
+	w.GET("/api/v1/static/zip", web.BaseHandler(u.ZipDownload))
 	w.POST("/api/v1/vscode/init-auth", web.BindHandler(u.VSCodeAuthInit))
 
 	// admin
@@ -170,6 +174,13 @@ func (h *UserHandler) cleanExpiredCache() {
 			delete(h.vsixCache, key)
 		}
 	}
+	if h.zipCache != nil {
+		for key, entry := range h.zipCache {
+			if now.Sub(entry.createdAt) > time.Hour {
+				delete(h.zipCache, key)
+			}
+		}
+	}
 }
 
 // VSIXDownload 下载VSCode插件
@@ -228,6 +239,75 @@ func (h *UserHandler) VSIXDownload(c *web.Context) error {
 	go h.cleanExpiredCache()
 
 	disposition := fmt.Sprintf("attachment; filename=monkeycode-%s.vsix", version)
+	c.Response().Header().Set("Content-Type", "application/octet-stream")
+	c.Response().Header().Set("Content-Disposition", disposition)
+	c.Response().Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+
+	_, err = c.Response().Writer.Write(data)
+	return err
+}
+
+// ZipDownload 下载ZIP包（Jetbrains插件包）
+//
+//	@Tags			User
+//	@Summary		下载ZIP包
+//	@Description	下载ZIP安装包（缓存1小时）
+//	@ID				zip-download
+//	@Accept			json
+//	@Produce		octet-stream
+//	@Router			/api/v1/static/zip [get]
+func (h *UserHandler) ZipDownload(c *web.Context) error {
+	if !h.limiter.Allow() {
+		return c.String(http.StatusTooManyRequests, "Too Many Requests")
+	}
+
+	s, err := h.usecase.GetSetting(c.Request().Context())
+	if err != nil {
+		return err
+	}
+
+	host := c.Request().Host
+	h.logger.With("url", c.Request().URL).With("header", c.Request().Header).With("host", host).DebugContext(c.Request().Context(), "zip download")
+	cacheKey := h.generateCacheKey(version.Version, h.cfg.GetBaseURL(c.Request(), s))
+	ver := strings.Trim(version.Version, "v")
+
+	// 缓存命中
+	h.cacheMu.RLock()
+	if entry, exists := h.zipCache[cacheKey]; exists {
+		if time.Since(entry.createdAt) < time.Hour {
+			h.cacheMu.RUnlock()
+
+			disposition := fmt.Sprintf("attachment; filename=monkeycode-%s.zip", ver)
+			c.Response().Header().Set("Content-Type", "application/octet-stream")
+			c.Response().Header().Set("Content-Disposition", disposition)
+			c.Response().Header().Set("Content-Length", fmt.Sprintf("%d", len(entry.data)))
+
+			fmt.Println(c.Response().Header())
+
+			_, werr := c.Response().Writer.Write(entry.data)
+			return werr
+		}
+	}
+	h.cacheMu.RUnlock()
+
+	var buf bytes.Buffer
+	if err := vsix.ChangeVsixEndpoint(fmt.Sprintf("/app/assets/vsix/monkeycode-%s.zip", ver), "roo-code/package.json", h.cfg.GetBaseURL(c.Request(), s), &buf); err != nil {
+		return err
+	}
+
+	data := buf.Bytes()
+	h.cacheMu.Lock()
+	h.zipCache[cacheKey] = &CacheEntry{
+		data:      data,
+		createdAt: time.Now(),
+	}
+	h.cacheMu.Unlock()
+
+	// 异步清理
+	go h.cleanExpiredCache()
+
+	// 响应输出
+	disposition := fmt.Sprintf("attachment; filename=monkeycode-%s.zip", ver)
 	c.Response().Header().Set("Content-Type", "application/octet-stream")
 	c.Response().Header().Set("Content-Disposition", disposition)
 	c.Response().Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
