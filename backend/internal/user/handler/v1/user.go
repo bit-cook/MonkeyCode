@@ -291,7 +291,7 @@ func (h *UserHandler) ZipDownload(c *web.Context) error {
 	h.cacheMu.RUnlock()
 
 	var buf bytes.Buffer
-	if err := vsix.ChangeVsixEndpoint(fmt.Sprintf("/app/assets/vsix/monkeycode-%s.zip", ver), "roo-code/package.json", h.cfg.GetBaseURL(c.Request(), s), &buf); err != nil {
+	if err := vsix.ChangeVsixEndpoint(fmt.Sprintf("/app/assets/jetbrains/monkeycode-%s.zip", ver), "roo-code/package.json", h.cfg.GetBaseURL(c.Request(), s), &buf); err != nil {
 		return err
 	}
 

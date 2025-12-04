@@ -27,6 +27,7 @@ WORKDIR /app
 
 ADD migration ./migration
 ADD assets/vsix ./assets/vsix
+ADD assets/jetbrains ./assets/jetbrains
 
 COPY --from=builder /out/main /app/main
 
