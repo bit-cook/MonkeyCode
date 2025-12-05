@@ -255,7 +255,7 @@ func (h *UserHandler) VSIXDownload(c *web.Context) error {
 //	@ID				zip-download
 //	@Accept			json
 //	@Produce		octet-stream
-//	@Router			/api/v1/static/zip [get]
+//	@Router			/api/v1/static/jetbrains [get]
 func (h *UserHandler) ZipDownload(c *web.Context) error {
 	if !h.limiter.Allow() {
 		return c.String(http.StatusTooManyRequests, "Too Many Requests")
