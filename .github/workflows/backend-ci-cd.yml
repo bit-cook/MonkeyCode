@@ -101,7 +101,7 @@ jobs:
           wget -O assets/vsix/monkeycode-${VERSION_NO_V}.vsix https://baizhiyun.oss-cn-hangzhou.aliyuncs.com/monkeycode/vsix/monkeycode-${VERSION_NO_V}.vsix
 
           # 下载 JetBrains 插件 (架构无关), jetbrains插件的下载地址硬编码, 后续需要修改
-          wget -O assets/jetbrains/monkeycode-${VERSION_NO_V}.zip https://baizhiyun.oss-cn-hangzhou.aliyuncs.com/monkeycode/jetbrains/monkeycode-jetbrains-1.22.4.zip
+          wget -O assets/jetbrains/monkeycode-${VERSION_NO_V}.zip https://baizhiyun.oss-cn-hangzhou.aliyuncs.com/monkeycode/jetbrains/monkeycode-jetbrains-${VERSION_NO_V}.zip
           
           # 下载 x86_64 SGP
           wget -O tarballs/sgp.tgz https://baizhiyun.oss-cn-hangzhou.aliyuncs.com/monkeycode/sgp/x86_64/sgp.tgz
